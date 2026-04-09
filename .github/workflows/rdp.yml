@@ -1,78 +1,25 @@
-name: RDP-Tunnel-Final-Fixed
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-      - name: Enable RDP & Open Firewall
-        shell: powershell
-        run: |
-          # 1. تفعيل سطح المكتب البعيد
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          
-          # 2. فتح جدار الحماية بقوة للمنفذ 3389
-          netsh advfirewall firewall add rule name="Allow RDP Port" dir=in action=allow protocol=TCP localport=3389
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          
-          # 3. إنشاء المستخدم وتفادي خطأ "المستخدم موجود"
-          $userExists = net user runneradmin 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            net user runneradmin "B9o6P2M0"
-          } else {
-            net user runneradmin "B9o6P2M0" /add
-            net localgroup administrators runneradmin /add
-          }
-          Add-Content $env:GITHUB_STEP_SUMMARY "### ✅ Step 1: RDP Enabled & User Ready"
-
-      - name: Install ZeroTier
-        shell: powershell
-        run: |
-          Add-Content $env:GITHUB_STEP_SUMMARY "### ⏳ Step 2: Installing ZeroTier..."
-          Invoke-WebRequest "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile "zt.msi"
-          Start-Process msiexec.exe -ArgumentList "/i zt.msi /qn" -Wait
-          Start-Sleep -Seconds 20
-
-      - name: Join Network and Get Info
+- name: Join Network and Get Info
         shell: powershell
         run: |
           $ztCli = "C:\Program Files (x86)\ZeroTier\One\zerotier-cli.bat"
-          if (-not (Test-Path $ztCli)) {
-            Write-Error "ZeroTier CLI not found!"
-            exit 1
-          }
           
-          # جلب الـ Node ID
           $info = & $ztCli info
-          $nodeId = ($info -split '\s+')[2]
+          Write-Host "=== Node Info: $info ==="
+          Add-Content $env:GITHUB_STEP_SUMMARY "Node Info: $info"
           
-          # الانضمام للشبكة
           & $ztCli join 633e31d8a2e99f6f
-          
-          # طباعة البيانات في الـ Summary بره بخط كبير وواضح
-          Add-Content $env:GITHUB_STEP_SUMMARY "## 🖥️ Connection Summary"
-          Add-Content $env:GITHUB_STEP_SUMMARY "---"
-          Add-Content $env:GITHUB_STEP_SUMMARY "### 🔑 YOUR NODE ID: **$nodeId**"
-          Add-Content $env:GITHUB_STEP_SUMMARY "> **Important:** Copy this ID and **Authorize** it in ZeroTier Central."
-          
-          # انتظار سحب الـ IP
-          Start-Sleep -Seconds 45
+          Start-Sleep -Seconds 25
           
           $networks = & $ztCli listnetworks
-          $ip = ($networks -split '\s+') | Where-Object { $_ -match '^10\.' } | Select-Object -First 1
+          Write-Host "=== Networks: $networks ==="
+          Add-Content $env:GITHUB_STEP_SUMMARY "Network: $networks"
           
-          if ($ip) {
-              Add-Content $env:GITHUB_STEP_SUMMARY "### 🌐 RDP IP: **$ip**"
-          } else {
-              Add-Content $env:GITHUB_STEP_SUMMARY "### 🌐 RDP IP: *Waiting for Auth...*"
-          }
-          
-          Add-Content $env:GITHUB_STEP_SUMMARY "> **Username:** `runneradmin`"
-          Add-Content $env:GITHUB_STEP_SUMMARY "> **Password:** `B9o6P2M0`"
+          $ip = ($networks -split '\s+') | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+' } | Select-Object -First 1
+          Write-Host "=== RDP IP: $ip ==="
+          Add-Content $env:GITHUB_STEP_SUMMARY "RDP IP: $ip"
+          Add-Content $env:GITHUB_STEP_SUMMARY "User: runneradmin"
+          Add-Content $env:GITHUB_STEP_SUMMARY "Pass: B9o6P2M0"
 
       - name: Keep Alive
         shell: powershell
-        run: |
-          Write-Host "Server is running. Do not close this action."
-          Start-Sleep -Seconds 21600
+        run: Start-Sleep -Seconds 21600
