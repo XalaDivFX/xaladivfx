@@ -21,11 +21,11 @@ jobs:
         # Download cloudflared windows binary
         curl -L -o cloudflared.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
 
-    - name: Start Cloudflare Tunnel
+  - name: Start Cloudflare Tunnel
       run: |
-        # Run a quick tunnel (no account needed)
-        Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://localhost:3389" -NoNewWindow
-        Start-Sleep -Seconds 20
+        # Force TCP on port 3389 with explicit protocol
+        Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://127.0.0.1:3389" -NoNewWindow
+        Start-Sleep -Seconds 30
 
     - name: Get RDP Address
       run: |
