@@ -1,4 +1,4 @@
-name: IQonomy-RDP-ZeroTier-Final-Fix
+name: IQonomy-RDP-ZeroTier-Ultimate-Fix
 
 on:
   workflow_dispatch:
@@ -8,47 +8,52 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Setup Remote Desktop
-        continue-on-error: true
+        # نستخدم shell powershell لضمان تنفيذ الأوامر بدقة
         shell: powershell
         run: |
+          # تفعيل الـ RDP وتجاوز الأخطاء إذا كان اليوزر موجوداً
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          # إضافة اليوزر وتجاهل الخطأ إذا كان موجوداً
-          net user runneradmin "B9o6P2M0" /add
-          net localgroup administrators runneradmin /add
+          net user runneradmin "B9o6P2M0" /add 2>$null
+          net localgroup administrators runneradmin /add 2>$null
           exit 0
 
       - name: Install ZeroTier
         shell: powershell
         run: |
           $msiPath = "$($env:TEMP)\ZeroTierOne.msi"
+          # تحميل النسخة الرسمية
           Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
+          # تثبيت صامت مع الانتظار حتى الانتهاء
           Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
-          # ننتظر قليلاً للتأكد من تشغيل الخدمة بعد التثبيت
-          Start-Sleep -Seconds 15
+          # وقت إضافي لضمان تشغيل الخدمة في الخلفية
+          Start-Sleep -Seconds 20
 
       - name: Join ZeroTier Network
         shell: powershell
         run: |
-          # ضع الـ Network ID الخاص بك هنا
+          # ضع هنا الـ Network ID الخاص بك من موقع ZeroTier
           $networkId = "633e31d8a2e99f6f" 
           
-          # البحث عن المسار الصحيح للملف التنفيذي بشكل ديناميكي
-          $ztCli = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
-          if (!(Test-Path $ztCli)) {
-              $ztCli = "C:\Program Files\ZeroTier\One\zerotier-one_x64.exe"
-          }
+          # استهداف المسار المباشر للملف لتجنب خطأ ObjectNotFound
+          $ztExe = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
           
-          Write-Host "Joining network using: $ztCli"
-          & $ztCli -q join $networkId
-          Start-Sleep -Seconds 10
+          if (Test-Path $ztExe) {
+              Write-Host "Joining network..."
+              & $ztExe -q join $networkId
+          } else {
+              Write-Host "Checking alternative path..."
+              $ztExe = "C:\Program Files\ZeroTier\One\zerotier-one_x64.exe"
+              & $ztExe -q join $networkId
+          }
+          Start-Sleep -Seconds 15
 
       - name: Connection Details
         run: |
           Write-Host "=========================================="
-          Write-Host "1. Authorize the new device at zerotier.com"
-          Write-Host "2. Connect to the 'Managed IP' via Windows App"
-          Write-Host "USER: runneradmin | PASS: B9o6P2M0"
+          Write-Host "1. Go to zerotier.com and Authorize the device"
+          Write-Host "2. Use Managed IP in your Mobile App"
+          Write-Host "User: runneradmin | Pass: B9o6P2M0"
           Write-Host "=========================================="
 
       - name: Keep Alive
