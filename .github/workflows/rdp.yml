@@ -1,4 +1,4 @@
-name: IQonomy-Final-Fix
+name: IQonomy-Zero-Error
 
 on:
   workflow_dispatch:
@@ -7,40 +7,37 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Setup Remote Desktop
+      - name: Setup RDP
         run: |
-          # تجاوز خطأ "الحساب موجود" - لو موجود يكمل عادي
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          $user = net user runneradmin 2>$null
-          if ($LASTEXITCODE -ne 0) {
+          if (!(net user | Select-String "runneradmin")) {
               net user runneradmin "B9o6P2M0" /add
               net localgroup administrators runneradmin /add
-          } else {
-              net user runneradmin "B9o6P2M0"
           }
 
-      - name: Install and Get ID
-        id: zt
+      - name: Force_ID_Discovery
         shell: powershell
         run: |
-          # تثبيت مباشر وسريع
-          $msiPath = "$($env:TEMP)\zt.msi"
-          Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
-          Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
-          Start-Sleep -Seconds 20
+          # 1. تحميل نسخة محمولة ومباشرة
+          Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile "zt.msi"
+          mkdir ZT_Core
+          msiexec.exe /a zt.msi /qb TARGETDIR="$((Get-Item .).FullName)\ZT_Core"
           
-          # جلب الـ ID غصباً عن المسارات
-          $zt = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
-          & $zt -q join 633e31d8a2e99f6f
-          Start-Sleep -Seconds 5
+          # 2. تشغيل الأداة من المجلد المستخرج مباشرة
+          $zt = Get-ChildItem -Path ".\ZT_Core" -Filter "zerotier-one_x64.exe" -Recurse | Select-Object -ExpandProperty FullName
+          Start-Process $zt -ArgumentList "-p9993" -NoNewWindow
+          Start-Sleep -Seconds 15
+          
+          # 3. جلب الـ ID
           $id = (& $zt -q status).Split(' ')[2]
           
-          # حفظ الـ ID في بيئة GitHub
-          echo "MY_NODE_ID=$id" >> $env:GITHUB_ENV
+          # 4. وضعه في عنوان ضخم يظهر لك بالخارج
+          echo "FINAL_ID=$id" >> $env:GITHUB_ENV
+          echo "### SUCCESS! YOUR ID: **$id**" >> $env:GITHUB_STEP_SUMMARY
 
-      - name: YOUR_ID_IS_==>_${{ env.MY_NODE_ID }}
-        run: echo "Look at the name of this step!"
+      - name: ==>_ID_IS:_[[_${{ env.FINAL_ID }}_]]
+        run: echo "Look at the name above!"
 
-      - name: Keep Alive
+      - name: Keep_Alive
         run: Start-Sleep -Seconds 21600
