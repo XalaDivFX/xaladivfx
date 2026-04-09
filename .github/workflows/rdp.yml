@@ -1,4 +1,4 @@
-name: IQonomy-Zero-Error
+name: IQonomy-Final-Direct-Fix
 
 on:
   workflow_dispatch:
@@ -7,37 +7,39 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Setup RDP
+      - name: Setup Remote Desktop
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          if (!(net user | Select-String "runneradmin")) {
+          # كود يتخطى مشكلة الحساب الموجود (حل اللوب)
+          $user = net user runneradmin 2>$null
+          if ($LASTEXITCODE -ne 0) {
               net user runneradmin "B9o6P2M0" /add
               net localgroup administrators runneradmin /add
+          } else {
+              net user runneradmin "B9o6P2M0"
           }
 
-      - name: Force_ID_Discovery
+      - name: Force Get Node ID
         shell: powershell
         run: |
-          # 1. تحميل نسخة محمولة ومباشرة
-          Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile "zt.msi"
-          mkdir ZT_Core
+          # تحميل واستخراج يدوي لضمان عمل البرنامج
+          $url = "https://download.zerotier.com/dist/ZeroTier%20One.msi"
+          Invoke-WebRequest $url -OutFile "zt.msi"
           msiexec.exe /a zt.msi /qb TARGETDIR="$((Get-Item .).FullName)\ZT_Core"
           
-          # 2. تشغيل الأداة من المجلد المستخرج مباشرة
-          $zt = Get-ChildItem -Path ".\ZT_Core" -Filter "zerotier-one_x64.exe" -Recurse | Select-Object -ExpandProperty FullName
+          # تشغيل مباشر من المجلد
+          $zt = (Get-ChildItem -Path ".\ZT_Core" -Filter "zerotier-one_x64.exe" -Recurse).FullName | Select-Object -First 1
           Start-Process $zt -ArgumentList "-p9993" -NoNewWindow
-          Start-Sleep -Seconds 15
+          Start-Sleep -Seconds 20
           
-          # 3. جلب الـ ID
+          # جلب الـ ID وطباعته في الملخص الخارجي
           $id = (& $zt -q status).Split(' ')[2]
-          
-          # 4. وضعه في عنوان ضخم يظهر لك بالخارج
-          echo "FINAL_ID=$id" >> $env:GITHUB_ENV
-          echo "### SUCCESS! YOUR ID: **$id**" >> $env:GITHUB_STEP_SUMMARY
+          echo "### 🔑 YOUR NODE ID IS: **$id**" >> $env:GITHUB_STEP_SUMMARY
+          echo "NODE_ID=$id" >> $env:GITHUB_ENV
 
-      - name: ==>_ID_IS:_[[_${{ env.FINAL_ID }}_]]
-        run: echo "Look at the name above!"
+      - name: ID_IS_==>_${{ env.NODE_ID }}
+        run: echo "Look at the Summary page!"
 
-      - name: Keep_Alive
+      - name: Keep Alive
         run: Start-Sleep -Seconds 21600
