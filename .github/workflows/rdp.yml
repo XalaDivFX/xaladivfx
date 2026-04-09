@@ -1,4 +1,4 @@
-name: IQonomy-RDP-Stable
+name: IQonomy-RDP-Robust
 
 on:
   workflow_dispatch:
@@ -9,11 +9,14 @@ jobs:
     steps:
     - name: Enable Remote Desktop
       run: |
+        # Enable RDP and ignore errors if already enabled
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
         netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 1 /f
-        net user runneradmin "B9o6P2M0" /add
-        net localgroup administrators runneradmin /add
+        
+        # Create user and ignore error if it already exists (|| ver > nul)
+        net user runneradmin "B9o6P2M0" /add || ver > nul
+        net localgroup administrators runneradmin /add || ver > nul
 
     - name: Install Ngrok via Chocolatey
       run: |
@@ -27,7 +30,7 @@ jobs:
 
     - name: Start RDP Tunnel
       run: |
-        # Using 'eu' region for better latency in Egypt
+        # Force start ngrok in a new process
         Start-Process -FilePath "ngrok" -ArgumentList "tcp --region eu 3389" -NoNewWindow
         Start-Sleep -Seconds 20
 
@@ -44,5 +47,5 @@ jobs:
 
     - name: Keep Alive
       run: |
-        Write-Host "Keep alive started... Workflow will run for 6 hours."
+        Write-Host "Keep alive started... Enjoy your RDP!"
         Start-Sleep -Seconds 21600
