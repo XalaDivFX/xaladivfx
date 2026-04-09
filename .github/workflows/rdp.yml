@@ -1,21 +1,46 @@
-- name: Join Network and Get Info
+name: RDP-Tunnel-Fixed
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Enable RDP
+        shell: powershell
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          $userExists = net user runneradmin 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            net user runneradmin "B9o6P2M0"
+          } else {
+            net user runneradmin "B9o6P2M0" /add
+            net localgroup administrators runneradmin /add
+          }
+          Add-Content $env:GITHUB_STEP_SUMMARY "RDP Enabled"
+
+      - name: Install ZeroTier
+        shell: powershell
+        run: |
+          Invoke-WebRequest "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile "zt.msi"
+          Start-Process msiexec.exe -ArgumentList "/i zt.msi /qn" -Wait
+          Start-Sleep -Seconds 15
+
+      - name: Join Network and Get Info
         shell: powershell
         run: |
           $ztCli = "C:\Program Files (x86)\ZeroTier\One\zerotier-cli.bat"
-          
+          if (-not (Test-Path $ztCli)) {
+            Write-Error "ZeroTier CLI not found!"
+            exit 1
+          }
           $info = & $ztCli info
-          Write-Host "=== Node Info: $info ==="
           Add-Content $env:GITHUB_STEP_SUMMARY "Node Info: $info"
-          
           & $ztCli join 633e31d8a2e99f6f
           Start-Sleep -Seconds 25
-          
           $networks = & $ztCli listnetworks
-          Write-Host "=== Networks: $networks ==="
           Add-Content $env:GITHUB_STEP_SUMMARY "Network: $networks"
-          
           $ip = ($networks -split '\s+') | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+' } | Select-Object -First 1
-          Write-Host "=== RDP IP: $ip ==="
           Add-Content $env:GITHUB_STEP_SUMMARY "RDP IP: $ip"
           Add-Content $env:GITHUB_STEP_SUMMARY "User: runneradmin"
           Add-Content $env:GITHUB_STEP_SUMMARY "Pass: B9o6P2M0"
