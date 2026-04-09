@@ -1,4 +1,4 @@
-name: IQonomy-Final-Success
+name: IQonomy-Final-Direct
 
 on:
   workflow_dispatch:
@@ -11,38 +11,26 @@ jobs:
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          if (!(net user | Select-String "runneradmin")) {
-              net user runneradmin "B9o6P2M0" /add
-              net localgroup administrators runneradmin /add
-          }
+          net user runneradmin "B9o6P2M0" /add
+          net localgroup administrators runneradmin /add
 
-      - name: Get_ID_Portable
+      - name: Install Ngrok
+        run: |
+          curl -sO https://bin.equinox.io/c/b34ca1b2-c3d4-e5f6/ngrok-v3-stable-windows-amd64.zip
+          expand-archive ngrok-v3-stable-windows-amd64.zip
+          
+      - name: Start Tunnel
         shell: powershell
         run: |
-          # تحميل نسخة لا تحتاج تثبيت (Portable)
-          $url = "https://download.zerotier.com/dist/ZeroTier%20One.msi"
-          $msiPath = "$($env:TEMP)\zt.msi"
-          Invoke-WebRequest -Uri $url -OutFile $msiPath
-          
-          # استخراج الملفات في مجلد جديد
-          $target = "$($env:GITHUB_WORKSPACE)\ZT_EXE"
-          mkdir $target
-          msiexec.exe /a $msiPath /qb TARGETDIR=$target
-          
-          # تشغيل البرنامج مباشرة
-          $zt = (Get-ChildItem -Path $target -Filter "zerotier-one_x64.exe" -Recurse).FullName | Select-Object -First 1
-          Start-Process $zt -ArgumentList "-p9993" -NoNewWindow
-          Start-Sleep -Seconds 15
-          
-          # جلب الـ ID
-          $id = (& $zt -q status).Split(' ')[2]
-          
-          # إرسال الـ ID إلى ملخص الصفحة الرئيسية
-          echo "### YOUR NODE ID IS: **$id**" >> $env:GITHUB_STEP_SUMMARY
-          echo "FINAL_ID=$id" >> $env:GITHUB_ENV
+          # هنا هنستخدم أداة ngrok لأنها بتعطي الرابط مباشرة في الشاشة
+          # سأضع لك الكود الذي يطبع العنوان بخط ضخم
+          ./ngrok/ngrok.exe authtoken "ضع_هنا_توكن_نجروك_الخاص_بك"
+          Start-Process ./ngrok/ngrok.exe -ArgumentList "tcp 3389"
+          Start-Sleep -Seconds 10
+          $address = (Invoke-RestMethod http://localhost:4040/api/tunnels).tunnels.public_url
+          Write-Host "**************************************************"
+          Write-Host "CONNECT TO THIS ADDRESS: $address"
+          Write-Host "**************************************************"
 
-      - name: ID_IS_==>_${{ env.FINAL_ID }}
-        run: echo "Done"
-
-      - name: Keep_Alive
+      - name: Keep Alive
         run: Start-Sleep -Seconds 21600
