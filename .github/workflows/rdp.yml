@@ -1,45 +1,43 @@
-name: IQonomy-Final-Direct-Fix
-
+name: RDP-Tunnel-Fixed
 on:
   workflow_dispatch:
+    inputs:
+      zerotier_network:
+        description: 'ZeroTier Network ID'
+        required: true
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Setup Remote Desktop
+      - name: Enable RDP
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          # كود يتخطى مشكلة الحساب الموجود (حل اللوب)
-          $user = net user runneradmin 2>$null
-          if ($LASTEXITCODE -ne 0) {
-              net user runneradmin "B9o6P2M0" /add
-              net localgroup administrators runneradmin /add
-          } else {
-              net user runneradmin "B9o6P2M0"
-          }
+          net user runneradmin "B9o6P2M0" /add 2>$null
+          net localgroup administrators runneradmin /add 2>$null
+          net user runneradmin "B9o6P2M0"
 
-      - name: Force Get Node ID
+      - name: Install ZeroTier & Join Network
         shell: powershell
         run: |
-          # تحميل واستخراج يدوي لضمان عمل البرنامج
-          $url = "https://download.zerotier.com/dist/ZeroTier%20One.msi"
-          Invoke-WebRequest $url -OutFile "zt.msi"
-          msiexec.exe /a zt.msi /qb TARGETDIR="$((Get-Item .).FullName)\ZT_Core"
+          # تحميل المثبّت الرسمي مباشرة
+          Invoke-WebRequest "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile "zt.msi"
+          Start-Process msiexec.exe -ArgumentList "/i zt.msi /qn" -Wait
           
-          # تشغيل مباشر من المجلد
-          $zt = (Get-ChildItem -Path ".\ZT_Core" -Filter "zerotier-one_x64.exe" -Recurse).FullName | Select-Object -First 1
-          Start-Process $zt -ArgumentList "-p9993" -NoNewWindow
+          Start-Sleep -Seconds 15
+          
+          # جلب الـ Node ID
+          $id = zerotier-cli info
+          echo "### Node Info: $id" >> $env:GITHUB_STEP_SUMMARY
+          
+          # الانضمام للـ Network
+          zerotier-cli join ${{ github.event.inputs.zerotier_network }}
+          
           Start-Sleep -Seconds 20
-          
-          # جلب الـ ID وطباعته في الملخص الخارجي
-          $id = (& $zt -q status).Split(' ')[2]
-          echo "### 🔑 YOUR NODE ID IS: **$id**" >> $env:GITHUB_STEP_SUMMARY
-          echo "NODE_ID=$id" >> $env:GITHUB_ENV
-
-      - name: ID_IS_==>_${{ env.NODE_ID }}
-        run: echo "Look at the Summary page!"
+          $ip = zerotier-cli listnetworks
+          echo "### Network: $ip" >> $env:GITHUB_STEP_SUMMARY
+          echo "### ✅ RDP Ready - Connect to ZeroTier IP" >> $env:GITHUB_STEP_SUMMARY
 
       - name: Keep Alive
         run: Start-Sleep -Seconds 21600
