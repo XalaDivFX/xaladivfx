@@ -1,4 +1,4 @@
-name: IQonomy-RDP-Cloudflare-Easy
+name: IQonomy-RDP-Cloudflare-Official
 
 on:
   workflow_dispatch:
@@ -7,36 +7,44 @@ jobs:
   setup-rdp:
     runs-on: windows-latest
     steps:
-    - name: Enable Remote Desktop
+    - name: Configure Windows Remote Desktop
       continue-on-error: true
       run: |
+        # Enable RDP in Registry
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+        # Enable Firewall Rules
         netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
+        # Set NLA (Network Level Authentication)
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 1 /f
+        # Create User with Administrative privileges
         net user runneradmin "B9o6P2M0" /add
         net localgroup administrators runneradmin /add
 
-    - name: Install Cloudflared
+    - name: Download Cloudflared
       run: |
-        # Download cloudflared windows binary
+        # Download the latest cloudflared windows binary
         curl -L -o cloudflared.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
 
-  - name: Start Cloudflare Tunnel
+    - name: Launch Tunnel
       run: |
-        # Force TCP on port 3389 with explicit protocol
+        # Start a quick tunnel pointing to RDP port (3389)
+        # We use 127.0.0.1 for more stability within the runner
         Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://127.0.0.1:3389" -NoNewWindow
+        # Wait for the tunnel to establish and generate the link
         Start-Sleep -Seconds 30
 
-    - name: Get RDP Address
+    - name: Get Connection Details
       run: |
-        # Cloudflare creates a random domain like: random-name.trycloudflare.com
-        Write-Host "=========================================="
-        Write-Host "LOOK ABOVE IN THE LOGS FOR THE LINK"
-        Write-Host "It looks like: something.trycloudflare.com:3389"
-        Write-Host "USERNAME: runneradmin"
-        Write-Host "PASSWORD: B9o6P2M0"
-        Write-Host "=========================================="
+        Write-Host "===================================================="
+        Write-Host "1. GO TO THE 'Launch Tunnel' STEP ABOVE."
+        Write-Host "2. LOOK FOR A LINK LIKE: something.trycloudflare.com"
+        Write-Host "3. USE THE FOLLOWING CREDENTIALS:"
+        Write-Host "   USERNAME : runneradmin"
+        Write-Host "   PASSWORD : B9o6P2M0"
+        Write-Host "===================================================="
 
-    - name: Keep Alive
+    - name: Keep Runner Alive
       run: |
+        # Keeps the RDP active for 6 hours
+        Write-Host "RDP is active. Do not close this action."
         Start-Sleep -Seconds 21600
