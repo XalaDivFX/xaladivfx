@@ -1,4 +1,4 @@
-name: IQonomy-ZeroTier-Show-ID-Clear
+name: IQonomy-Final
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Setup Remote Desktop
+      - name: Setup RDP
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
@@ -16,27 +16,26 @@ jobs:
               net localgroup administrators runneradmin /add
           }
 
-      - name: Get Node ID
-        id: get_id
+      - name: Get_Node_ID
         shell: powershell
         run: |
-          $url = "https://download.zerotier.com/dist/ZeroTier%20One.msi"
+          # تحميل البرنامج وتثبيته في مسار ثابت ومباشر
           $msiPath = "$($env:TEMP)\zt.msi"
-          $extractPath = "$($env:TEMP)\ZT_Folder"
-          Invoke-WebRequest -Uri $url -OutFile $msiPath
-          mkdir $extractPath -ErrorAction SilentlyContinue
-          msiexec.exe /a $msiPath /qb TARGETDIR=$extractPath
-          $ztExe = (Get-ChildItem -Path $extractPath -Filter "zerotier-one_x64.exe" -Recurse).FullName | Select-Object -First 1
-          Start-Process $ztExe -ArgumentList "-p9993" -NoNewWindow
-          Start-Sleep -Seconds 15
-          $status = & $ztExe -q status
-          $myId = $status.Split(' ')[2]
-          # هذا السطر سيجعل الـ ID يظهر في ملخص الأكشن بالخارج
-          echo "NODE_ID=$myId" >> $env:GITHUB_ENV
-          Write-Host "ID IS: $myId"
+          Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
+          Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
+          Start-Sleep -Seconds 20
+          
+          # استخراج الـ ID ووضعه في عنوان الخطوة القادمة
+          $zt = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
+          & $zt -q join 633e31d8a2e99f6f
+          Start-Sleep -Seconds 5
+          $id = (& $zt -q status).Split(' ')[2]
+          
+          # السطر التالي هو ما سيظهر لك الـ ID في الخارج بخط واضح
+          echo "FINAL_ID=$id" >> $env:GITHUB_ENV
 
-      - name: Your ID IS ${{ env.NODE_ID }}
-        run: echo "Look at the step name above!"
+      - name: COPY_THIS_ID_==>_${{ env.FINAL_ID }}
+        run: echo "Done"
 
-      - name: Keep Alive
+      - name: Keep_Alive
         run: Start-Sleep -Seconds 21600
