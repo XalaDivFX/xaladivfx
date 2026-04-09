@@ -1,10 +1,6 @@
 name: RDP-Tunnel-Fixed
 on:
   workflow_dispatch:
-    inputs:
-      zerotier_network:
-        description: 'ZeroTier Network ID'
-        required: true
 
 jobs:
   build:
@@ -15,9 +11,15 @@ jobs:
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          net user runneradmin "B9o6P2M0" /add 2>$null
-          net localgroup administrators runneradmin /add 2>$null
-          net user runneradmin "B9o6P2M0"
+          
+          # حل مشكلة "account already exists"
+          $userExists = net user runneradmin 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            net user runneradmin "B9o6P2M0"
+          } else {
+            net user runneradmin "B9o6P2M0" /add
+            net localgroup administrators runneradmin /add
+          }
           echo "### ✅ RDP Enabled" >> $env:GITHUB_STEP_SUMMARY
 
       - name: Install ZeroTier
@@ -32,9 +34,8 @@ jobs:
         run: |
           $ztCli = "C:\Program Files (x86)\ZeroTier\One\zerotier-cli.exe"
           
-          # تأكيد التثبيت
           if (-not (Test-Path $ztCli)) {
-            Write-Error "ZeroTier CLI not found! Searching..."
+            Write-Error "ZeroTier CLI not found!"
             Get-ChildItem "C:\Program Files (x86)\ZeroTier\" -Recurse
             exit 1
           }
@@ -43,15 +44,14 @@ jobs:
           $info = & $ztCli info
           echo "### 🔑 Node Info: $info" >> $env:GITHUB_STEP_SUMMARY
           
-          # Join Network
-          & $ztCli join ${{ github.event.inputs.zerotier_network }}
+          # Join Network - hardcoded
+          & $ztCli join 633e31d8a2e99f6f
           Start-Sleep -Seconds 25
           
           # Network Details
           $networks = & $ztCli listnetworks
           echo "### 🌐 Network: $networks" >> $env:GITHUB_STEP_SUMMARY
           
-          # استخراج الـ IP
           $ip = ($networks -split '\s+') | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+' } | Select-Object -First 1
           echo "### 💻 RDP IP: $ip" >> $env:GITHUB_STEP_SUMMARY
           echo "### 👤 User: runneradmin" >> $env:GITHUB_STEP_SUMMARY
