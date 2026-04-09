@@ -1,4 +1,4 @@
-name: IQonomy-ZeroTier-Final-Stable
+name: IQonomy-ZeroTier-Show-ID-Clear
 
 on:
   workflow_dispatch:
@@ -8,46 +8,35 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Setup Remote Desktop
-        shell: powershell
         run: |
-          # تفعيل RDP وإضافة المستخدم فقط إذا لم يكن موجوداً (حل مشكلة الصورة 08-16-06)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          
           if (!(net user | Select-String "runneradmin")) {
               net user runneradmin "B9o6P2M0" /add
               net localgroup administrators runneradmin /add
           }
-          exit 0
 
-      - name: Force Get Node ID
+      - name: Get Node ID
+        id: get_id
         shell: powershell
         run: |
-          $networkId = "633e31d8a2e99f6f"
           $url = "https://download.zerotier.com/dist/ZeroTier%20One.msi"
           $msiPath = "$($env:TEMP)\zt.msi"
           $extractPath = "$($env:TEMP)\ZT_Folder"
-          
-          # تحميل واستخراج الملفات بدون "تثبيت" رسمي لتجنب مشاكل المسارات
           Invoke-WebRequest -Uri $url -OutFile $msiPath
           mkdir $extractPath -ErrorAction SilentlyContinue
           msiexec.exe /a $msiPath /qb TARGETDIR=$extractPath
-          
-          # تشغيل البرنامج من المجلد المؤقت مباشرة
           $ztExe = (Get-ChildItem -Path $extractPath -Filter "zerotier-one_x64.exe" -Recurse).FullName | Select-Object -First 1
-          
-          if ($ztExe) {
-              Start-Process $ztExe -ArgumentList "-p9993" -NoNewWindow
-              Start-Sleep -Seconds 15
-              $status = & $ztExe -q status
-              $myId = $status.Split(' ')[2]
-              
-              Write-Host "`n`n"
-              Write-Host "**************************************************"
-              Write-Host "SUCCESS! YOUR NODE ID IS: $myId"
-              Write-Host "**************************************************"
-              Write-Host "`n`n"
-          }
+          Start-Process $ztExe -ArgumentList "-p9993" -NoNewWindow
+          Start-Sleep -Seconds 15
+          $status = & $ztExe -q status
+          $myId = $status.Split(' ')[2]
+          # هذا السطر سيجعل الـ ID يظهر في ملخص الأكشن بالخارج
+          echo "NODE_ID=$myId" >> $env:GITHUB_ENV
+          Write-Host "ID IS: $myId"
+
+      - name: Your ID IS ${{ env.NODE_ID }}
+        run: echo "Look at the step name above!"
 
       - name: Keep Alive
         run: Start-Sleep -Seconds 21600
