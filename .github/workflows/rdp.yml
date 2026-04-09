@@ -10,7 +10,7 @@ jobs:
       - name: Setup Remote Desktop
         shell: powershell
         run: |
-          # تفعيل RDP وتجاوز خطأ اليوزر (حل مشكلة Screenshot 07-16-20)
+          # تفعيل RDP وتجاوز خطأ المستخدم الموجود مسبقاً
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
@@ -24,37 +24,33 @@ jobs:
       - name: Install ZeroTier
         shell: powershell
         run: |
+          # تحميل وتثبيت ZeroTier صامتاً
           $msiPath = "$($env:TEMP)\ZeroTierOne.msi"
           Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
           Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
           Start-Sleep -Seconds 20
 
-      - name: Join ZeroTier Network
+      - name: Join & Get ID
+        id: getid
         shell: powershell
         run: |
           $networkId = "633e31d8a2e99f6f" 
+          $ztExe = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
+          if (!(Test-Path $ztExe)) { $ztExe = "C:\Program Files\ZeroTier\One\zerotier-one_x64.exe" }
           
-          # فحص المسارات (حل مشكلة Screenshot 07-19-31)
-          $paths = @(
-              "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe",
-              "C:\Program Files\ZeroTier\One\zerotier-one_x64.exe"
-          )
-          
-          $ztExe = ""
-          foreach ($path in $paths) {
-              if (Test-Path $path) { $ztExe = $path; break }
-          }
-          
-          if ($ztExe) {
-              & $ztExe -q join $networkId
-              Start-Sleep -Seconds 5
-              Write-Host "=========================================="
-              Write-Host "YOUR NODE ID IS:"
-              # إظهار الـ ID بوضوح للإضافة اليدوية
-              & $ztExe -q status | ForEach-Object { $_.Split(' ')[2] }
-              Write-Host "=========================================="
-          }
+          # الانضمام للشبكة
+          & $ztExe -q join $networkId
           Start-Sleep -Seconds 10
+          
+          # استخراج الـ ID وطباعته بوضوح شديد
+          $status = & $ztExe -q status
+          $myId = $status.Split(' ')[2]
+          
+          Write-Host "**************************************************"
+          Write-Host "STEP 1: COPY THIS ID --> $myId"
+          Write-Host "STEP 2: GO TO ZEROTIER WEBSITE"
+          Write-Host "STEP 3: CLICK 'ADD MANUALLY' AND PASTE THE ID"
+          Write-Host "**************************************************"
 
       - name: Keep Alive
         run: Start-Sleep -Seconds 21600
