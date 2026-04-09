@@ -10,44 +10,43 @@ jobs:
       - name: Setup Remote Desktop
         shell: powershell
         run: |
+          # تفعيل RDP وإضافة المستخدم فقط إذا لم يكن موجوداً (حل مشكلة الصورة 08-16-06)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          net user runneradmin "B9o6P2M0" /add
-          net localgroup administrators runneradmin /add
+          
+          if (!(net user | Select-String "runneradmin")) {
+              net user runneradmin "B9o6P2M0" /add
+              net localgroup administrators runneradmin /add
+          }
+          exit 0
 
-      - name: Force Get Node ID (Portable Mode)
-        id: zt_step
+      - name: Force Get Node ID
         shell: powershell
         run: |
-          # تحميل ملفات التشغيل مباشرة بدون تثبيت MSI
+          $networkId = "633e31d8a2e99f6f"
           $url = "https://download.zerotier.com/dist/ZeroTier%20One.msi"
           $msiPath = "$($env:TEMP)\zt.msi"
+          $extractPath = "$($env:TEMP)\ZT_Folder"
+          
+          # تحميل واستخراج الملفات بدون "تثبيت" رسمي لتجنب مشاكل المسارات
           Invoke-WebRequest -Uri $url -OutFile $msiPath
+          mkdir $extractPath -ErrorAction SilentlyContinue
+          msiexec.exe /a $msiPath /qb TARGETDIR=$extractPath
           
-          # استخراج الملفات يدوياً لتجنب مشاكل التثبيت
-          mkdir "$($env:TEMP)\ZT"
-          msiexec.exe /a $msiPath /qb TARGETDIR="$($env:TEMP)\ZT"
-          
-          # البحث عن الملف في المجلد المستخرج وتشغيله
-          $ztExe = (Get-ChildItem -Path "$($env:TEMP)\ZT" -Filter "zerotier-one_x64.exe" -Recurse).FullName | Select-Object -First 1
+          # تشغيل البرنامج من المجلد المؤقت مباشرة
+          $ztExe = (Get-ChildItem -Path $extractPath -Filter "zerotier-one_x64.exe" -Recurse).FullName | Select-Object -First 1
           
           if ($ztExe) {
-              Write-Host "ZeroTier binary extracted to: $ztExe"
-              # تشغيل الخدمة في الخلفية لجلب الـ ID
               Start-Process $ztExe -ArgumentList "-p9993" -NoNewWindow
               Start-Sleep -Seconds 15
-              
-              # جلب الـ ID
               $status = & $ztExe -q status
               $myId = $status.Split(' ')[2]
               
               Write-Host "`n`n"
               Write-Host "**************************************************"
-              Write-Host "FOUND IT! YOUR NODE ID IS: $myId"
+              Write-Host "SUCCESS! YOUR NODE ID IS: $myId"
               Write-Host "**************************************************"
               Write-Host "`n`n"
-          } else {
-              Write-Error "Failed to extract ZeroTier."
           }
 
       - name: Keep Alive
