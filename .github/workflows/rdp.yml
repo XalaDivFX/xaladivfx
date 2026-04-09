@@ -1,4 +1,4 @@
-name: IQonomy-Final-Direct
+name: IQonomy-Final-Fix
 
 on:
   workflow_dispatch:
@@ -9,28 +9,38 @@ jobs:
     steps:
       - name: Setup Remote Desktop
         run: |
+          # تجاوز خطأ "الحساب موجود" - لو موجود يكمل عادي
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          net user runneradmin "B9o6P2M0" /add
-          net localgroup administrators runneradmin /add
+          $user = net user runneradmin 2>$null
+          if ($LASTEXITCODE -ne 0) {
+              net user runneradmin "B9o6P2M0" /add
+              net localgroup administrators runneradmin /add
+          } else {
+              net user runneradmin "B9o6P2M0"
+          }
 
-      - name: Install Ngrok
-        run: |
-          curl -sO https://bin.equinox.io/c/b34ca1b2-c3d4-e5f6/ngrok-v3-stable-windows-amd64.zip
-          expand-archive ngrok-v3-stable-windows-amd64.zip
-          
-      - name: Start Tunnel
+      - name: Install and Get ID
+        id: zt
         shell: powershell
         run: |
-          # هنا هنستخدم أداة ngrok لأنها بتعطي الرابط مباشرة في الشاشة
-          # سأضع لك الكود الذي يطبع العنوان بخط ضخم
-          ./ngrok/ngrok.exe authtoken "ضع_هنا_توكن_نجروك_الخاص_بك"
-          Start-Process ./ngrok/ngrok.exe -ArgumentList "tcp 3389"
-          Start-Sleep -Seconds 10
-          $address = (Invoke-RestMethod http://localhost:4040/api/tunnels).tunnels.public_url
-          Write-Host "**************************************************"
-          Write-Host "CONNECT TO THIS ADDRESS: $address"
-          Write-Host "**************************************************"
+          # تثبيت مباشر وسريع
+          $msiPath = "$($env:TEMP)\zt.msi"
+          Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
+          Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
+          Start-Sleep -Seconds 20
+          
+          # جلب الـ ID غصباً عن المسارات
+          $zt = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
+          & $zt -q join 633e31d8a2e99f6f
+          Start-Sleep -Seconds 5
+          $id = (& $zt -q status).Split(' ')[2]
+          
+          # حفظ الـ ID في بيئة GitHub
+          echo "MY_NODE_ID=$id" >> $env:GITHUB_ENV
+
+      - name: YOUR_ID_IS_==>_${{ env.MY_NODE_ID }}
+        run: echo "Look at the name of this step!"
 
       - name: Keep Alive
         run: Start-Sleep -Seconds 21600
