@@ -1,4 +1,4 @@
-name: IQonomy-RDP-ZeroTier
+name: IQonomy-RDP-ZeroTier-Final
 
 on:
   workflow_dispatch:
@@ -8,27 +8,36 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Setup Remote Desktop
+        # إضافة continue-on-error عشان نتخطى خطأ "اليوزر موجود"
+        continue-on-error: true
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          net user runneradmin "B9o6P2M0" /add
-          net localgroup administrators runneradmin /add
+          # محاولة إضافة اليوزر وتجاهل الخطأ لو موجود
+          net user runneradmin "B9o6P2M0" /add || echo "User already exists"
+          net localgroup administrators runneradmin /add || echo "User already in group"
 
       - name: Install ZeroTier
-        shell: powershell
         run: |
           $msiPath = "$($env:TEMP)\ZeroTierOne.msi"
           Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
           Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
           
-      - name: Join Network
-        shell: powershell
+      - name: Join ZeroTier Network
         run: |
-          # استبدل الـ ID ده بـ Network ID الخاص بك من موقع zerotier.com
+          # استبدل الـ ID بالـ Network ID بتاعك من موقع ZeroTier
           $networkId = "633e31d8a2e99f6f" 
-          cd "C:\Program Files (x86)\ZeroTier\One"
-          .\zerotier-one_x64.exe -q join $networkId
+          $ztPath = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
+          & $ztPath -q join $networkId
           Start-Sleep -Seconds 20
+
+      - name: Connection Details
+        run: |
+          Write-Host "=========================================="
+          Write-Host "1. Authorize this device in ZeroTier Central"
+          Write-Host "2. Use the Managed IP to connect"
+          Write-Host "USER: runneradmin | PASS: B9o6P2M0"
+          Write-Host "=========================================="
 
       - name: Keep Alive
         run: Start-Sleep -Seconds 21600
