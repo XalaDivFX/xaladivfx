@@ -1,4 +1,4 @@
-name: IQonomy-RDP-Ngrok
+name: IQonomy-RDP-Fixed-Final
 
 on:
   workflow_dispatch:
@@ -9,26 +9,30 @@ jobs:
     steps:
     - name: Enable Remote Desktop
       run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        # تفعيل الـ RDP بطريقة سريعة ومباشرة
+        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+        netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
+        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 1 /f
+        # تحديث كلمة المرور للمسؤول
         net user runneradmin "B9o6P2M0"
 
     - name: Download and Setup Ngrok
       env:
         NGROK_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       run: |
-        # تحميل الأداة
-        Invoke-WebRequest https://bin.equinox.io/c/b34edq6tiW5/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-        # فك الضغط في المجلد الحالي مباشرة (بدون مجلد فرعي)
+        # استخدام رابط تحميل مباشر ومستقر من Chocolatey أو الرابط الرسمي الحديث
+        curl -L -o ngrok.zip https://bin.equinox.io/c/b34edq6tiW5/ngrok-v3-stable-windows-amd64.zip
+        # ملاحظة: إذا فشل الرابط أعلاه، سنستخدم النسخة المباشرة:
+        if (-not (Test-Path ngrok.zip)) {
+           Invoke-WebRequest https://bin.equinox.io/c/b34edq6tiW5/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+        }
         Expand-Archive ngrok.zip -DestinationPath .
-        # تفعيل التوكن
         .\ngrok.exe config add-authtoken $env:NGROK_TOKEN
 
     - name: Start RDP Tunnel
       run: |
-        # تشغيل الأداة من المسار الحالي مباشرة
-        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+        # تشغيل التانل وتحديد المنطقة لتقليل البطء (Europe)
+        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp --region eu 3389" -NoNewWindow
         Start-Sleep -Seconds 15
 
     - name: Get RDP Address
@@ -36,13 +40,13 @@ jobs:
         $response = Invoke-RestMethod -Uri http://localhost:4040/api/tunnels
         $url = $response.tunnels[0].public_url
         $clean_url = $url.Replace("tcp://", "")
-        Write-Host "--------------------------------------------"
-        Write-Host "Connect via RDP to: $clean_url"
+        Write-Host "`n`n--------------------------------------------"
+        Write-Host "Connect to: $clean_url"
         Write-Host "User: runneradmin"
         Write-Host "Pass: B9o6P2M0"
-        Write-Host "--------------------------------------------"
+        Write-Host "--------------------------------------------`n`n"
 
-    - name: Wait for Connection
+    - name: Keep Alive
       run: |
-        # إبقاء السيرفر متاحاً لمدة 6 ساعات
+        # الانتظار لمدة 6 ساعات
         Start-Sleep -Seconds 21600
