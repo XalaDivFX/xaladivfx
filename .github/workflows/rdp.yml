@@ -1,4 +1,4 @@
-name: IQonomy-RDP-PowerShell-Fixed
+name: IQonomy-RDP-Final-v1
 
 on:
   workflow_dispatch:
@@ -8,20 +8,13 @@ jobs:
     runs-on: windows-latest
     steps:
     - name: Enable Remote Desktop
-      shell: powershell
+      continue-on-error: true
       run: |
-        # Enable RDP
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
         netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 1 /f
-        
-        # Create user if it doesn't exist using try-catch
-        try {
-            net user runneradmin "B9o6P2M0" /add
-            net localgroup administrators runneradmin /add
-        } catch {
-            Write-Host "User already exists or error occurred, skipping..."
-        }
+        net user runneradmin "B9o6P2M0" /add
+        net localgroup administrators runneradmin /add
 
     - name: Install Ngrok via Chocolatey
       run: |
@@ -51,5 +44,5 @@ jobs:
 
     - name: Keep Alive
       run: |
-        Write-Host "Workflow is running. Connection is active."
+        Write-Host "Connection is ready. You can connect now."
         Start-Sleep -Seconds 21600
