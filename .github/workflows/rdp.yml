@@ -1,4 +1,4 @@
-name: IQonomy-RDP-ZeroTier-Final
+name: IQonomy-RDP-ZeroTier-Final-Fix
 
 on:
   workflow_dispatch:
@@ -8,34 +8,46 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Setup Remote Desktop
-        # إضافة continue-on-error عشان نتخطى خطأ "اليوزر موجود"
         continue-on-error: true
+        shell: powershell
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          # محاولة إضافة اليوزر وتجاهل الخطأ لو موجود
-          net user runneradmin "B9o6P2M0" /add || echo "User already exists"
-          net localgroup administrators runneradmin /add || echo "User already in group"
+          # إضافة اليوزر وتجاهل الخطأ إذا كان موجوداً
+          net user runneradmin "B9o6P2M0" /add
+          net localgroup administrators runneradmin /add
+          exit 0
 
       - name: Install ZeroTier
+        shell: powershell
         run: |
           $msiPath = "$($env:TEMP)\ZeroTierOne.msi"
           Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
           Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
-          
+          # ننتظر قليلاً للتأكد من تشغيل الخدمة بعد التثبيت
+          Start-Sleep -Seconds 15
+
       - name: Join ZeroTier Network
+        shell: powershell
         run: |
-          # استبدل الـ ID بالـ Network ID بتاعك من موقع ZeroTier
+          # ضع الـ Network ID الخاص بك هنا
           $networkId = "633e31d8a2e99f6f" 
-          $ztPath = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
-          & $ztPath -q join $networkId
-          Start-Sleep -Seconds 20
+          
+          # البحث عن المسار الصحيح للملف التنفيذي بشكل ديناميكي
+          $ztCli = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
+          if (!(Test-Path $ztCli)) {
+              $ztCli = "C:\Program Files\ZeroTier\One\zerotier-one_x64.exe"
+          }
+          
+          Write-Host "Joining network using: $ztCli"
+          & $ztCli -q join $networkId
+          Start-Sleep -Seconds 10
 
       - name: Connection Details
         run: |
           Write-Host "=========================================="
-          Write-Host "1. Authorize this device in ZeroTier Central"
-          Write-Host "2. Use the Managed IP to connect"
+          Write-Host "1. Authorize the new device at zerotier.com"
+          Write-Host "2. Connect to the 'Managed IP' via Windows App"
           Write-Host "USER: runneradmin | PASS: B9o6P2M0"
           Write-Host "=========================================="
 
