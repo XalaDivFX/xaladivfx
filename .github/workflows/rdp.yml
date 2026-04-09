@@ -1,4 +1,4 @@
-name: IQonomy-RDP-Final-Fix
+name: IQonomy-RDP-Cloudflare-Pro
 
 on:
   workflow_dispatch:
@@ -7,37 +7,31 @@ jobs:
   setup-rdp:
     runs-on: windows-latest
     steps:
-    - name: Enable RDP and Setup User
-      # continue-on-error will keep the workflow running even if user commands fail
+    - name: Configure Windows for Remote Access
       continue-on-error: true
       run: |
+        # Enable RDP
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+        # Disable NLA to allow older or Linux-based clients to connect easily
+        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
+        # Enable Firewall
         netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
-        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 1 /f
+        # Setup User
         net user runneradmin "B9o6P2M0" /add
         net localgroup administrators runneradmin /add
-        # Forced exit 0 to ensure GitHub thinks this step passed
         exit 0
 
-    - name: Download Cloudflared
+    - name: Install Cloudflared
       run: |
         curl -L -o cloudflared.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
 
     - name: Launch Tunnel
       run: |
-        # Use localhost for internal routing
-        Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://localhost:3389" -NoNewWindow
+        # Starting tunnel on localhost port 3389
+        Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://127.0.0.1:3389" -NoNewWindow
         Start-Sleep -Seconds 30
-
-    - name: Connection Guide
-      run: |
-        Write-Host "===================================================="
-        Write-Host "1. Check 'Launch Tunnel' step for the .trycloudflare.com link"
-        Write-Host "2. Username: runneradmin"
-        Write-Host "3. Password: B9o6P2M0"
-        Write-Host "===================================================="
 
     - name: Keep Alive
       run: |
-        Write-Host "Workflow is running for 6 hours..."
+        Write-Host "Check Launch Tunnel logs for the new link."
         Start-Sleep -Seconds 21600
