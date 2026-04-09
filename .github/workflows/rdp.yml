@@ -19,6 +19,25 @@ jobs:
           }
           Add-Content $env:GITHUB_STEP_SUMMARY "RDP Enabled"
 
+      - name: Fix RDP Auth and Firewall
+        shell: powershell
+        run: |
+          reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
+          reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v SecurityLayer /t REG_DWORD /d 0 /f
+          
+          # فتح البورت 3389 في الفايروول بشكل كامل
+          netsh advfirewall firewall add rule name="RDP-TCP-3389" protocol=TCP dir=in localport=3389 action=allow
+          netsh advfirewall firewall add rule name="RDP-UDP-3389" protocol=UDP dir=in localport=3389 action=allow
+          
+          # التأكد ان الـ RDP Service شغال
+          Set-Service -Name TermService -StartupType Automatic
+          Start-Service -Name TermService
+          
+          # تعطيل الـ Windows Firewall كليا عشان نضمن
+          netsh advfirewall set allprofiles state off
+          
+          Add-Content $env:GITHUB_STEP_SUMMARY "Firewall and RDP Auth Fixed"
+
       - name: Install ZeroTier
         shell: powershell
         run: |
@@ -35,12 +54,15 @@ jobs:
             exit 1
           }
           $info = & $ztCli info
+          Write-Host "=== Node Info: $info ==="
           Add-Content $env:GITHUB_STEP_SUMMARY "Node Info: $info"
           & $ztCli join 633e31d8a2e99f6f
           Start-Sleep -Seconds 25
           $networks = & $ztCli listnetworks
+          Write-Host "=== Networks: $networks ==="
           Add-Content $env:GITHUB_STEP_SUMMARY "Network: $networks"
           $ip = ($networks -split '\s+') | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+' } | Select-Object -First 1
+          Write-Host "=== RDP IP: $ip ==="
           Add-Content $env:GITHUB_STEP_SUMMARY "RDP IP: $ip"
           Add-Content $env:GITHUB_STEP_SUMMARY "User: runneradmin"
           Add-Content $env:GITHUB_STEP_SUMMARY "Pass: B9o6P2M0"
