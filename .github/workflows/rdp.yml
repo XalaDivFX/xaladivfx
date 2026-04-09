@@ -10,10 +10,8 @@ jobs:
       - name: Setup Remote Desktop
         shell: powershell
         run: |
-          # تفعيل RDP وتجاوز خطأ المستخدم الموجود مسبقاً
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          
           $userExists = net user | Select-String "runneradmin"
           if (!$userExists) {
               net user runneradmin "B9o6P2M0" /add
@@ -24,33 +22,34 @@ jobs:
       - name: Install ZeroTier
         shell: powershell
         run: |
-          # تحميل وتثبيت ZeroTier صامتاً
           $msiPath = "$($env:TEMP)\ZeroTierOne.msi"
           Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
           Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
-          Start-Sleep -Seconds 20
+          # وقت إضافي لضمان تسجيل البرنامج في النظام
+          Start-Sleep -Seconds 30
 
-      - name: Join & Get ID
-        id: getid
+      - name: Join & Force Get ID
         shell: powershell
         run: |
-          $networkId = "633e31d8a2e99f6f" 
-          $ztExe = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
-          if (!(Test-Path $ztExe)) { $ztExe = "C:\Program Files\ZeroTier\One\zerotier-one_x64.exe" }
+          $networkId = "633e31d8a2e99f6f"
           
-          # الانضمام للشبكة
-          & $ztExe -q join $networkId
-          Start-Sleep -Seconds 10
+          # البحث الديناميكي عن مكان الملف التنفيذي
+          $ztExe = (Get-ChildItem -Path "C:\Program Files*" -Filter "zerotier-one_x64.exe" -Recurse -ErrorAction SilentlyContinue).FullName | Select-Object -First 1
           
-          # استخراج الـ ID وطباعته بوضوح شديد
-          $status = & $ztExe -q status
-          $myId = $status.Split(' ')[2]
-          
-          Write-Host "**************************************************"
-          Write-Host "STEP 1: COPY THIS ID --> $myId"
-          Write-Host "STEP 2: GO TO ZEROTIER WEBSITE"
-          Write-Host "STEP 3: CLICK 'ADD MANUALLY' AND PASTE THE ID"
-          Write-Host "**************************************************"
+          if ($ztExe) {
+              Write-Host "Found ZeroTier at: $ztExe"
+              & $ztExe -q join $networkId
+              Start-Sleep -Seconds 10
+              $status = & $ztExe -q status
+              $myId = $status.Split(' ')[2]
+              
+              Write-Host "**************************************************"
+              Write-Host "SUCCESS! YOUR ID IS: $myId"
+              Write-Host "**************************************************"
+          } else {
+              Write-Error "ZeroTier executable not found. Please check installation."
+              exit 1
+          }
 
       - name: Keep Alive
         run: Start-Sleep -Seconds 21600
