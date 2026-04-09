@@ -1,4 +1,4 @@
-name: IQonomy-Final
+name: IQonomy-Final-Success
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Setup RDP
+      - name: Setup Remote Desktop
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
@@ -16,25 +16,32 @@ jobs:
               net localgroup administrators runneradmin /add
           }
 
-      - name: Get_Node_ID
+      - name: Get_ID_Portable
         shell: powershell
         run: |
-          # تحميل البرنامج وتثبيته في مسار ثابت ومباشر
+          # تحميل نسخة لا تحتاج تثبيت (Portable)
+          $url = "https://download.zerotier.com/dist/ZeroTier%20One.msi"
           $msiPath = "$($env:TEMP)\zt.msi"
-          Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
-          Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
-          Start-Sleep -Seconds 20
+          Invoke-WebRequest -Uri $url -OutFile $msiPath
           
-          # استخراج الـ ID ووضعه في عنوان الخطوة القادمة
-          $zt = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
-          & $zt -q join 633e31d8a2e99f6f
-          Start-Sleep -Seconds 5
+          # استخراج الملفات في مجلد جديد
+          $target = "$($env:GITHUB_WORKSPACE)\ZT_EXE"
+          mkdir $target
+          msiexec.exe /a $msiPath /qb TARGETDIR=$target
+          
+          # تشغيل البرنامج مباشرة
+          $zt = (Get-ChildItem -Path $target -Filter "zerotier-one_x64.exe" -Recurse).FullName | Select-Object -First 1
+          Start-Process $zt -ArgumentList "-p9993" -NoNewWindow
+          Start-Sleep -Seconds 15
+          
+          # جلب الـ ID
           $id = (& $zt -q status).Split(' ')[2]
           
-          # السطر التالي هو ما سيظهر لك الـ ID في الخارج بخط واضح
+          # إرسال الـ ID إلى ملخص الصفحة الرئيسية
+          echo "### YOUR NODE ID IS: **$id**" >> $env:GITHUB_STEP_SUMMARY
           echo "FINAL_ID=$id" >> $env:GITHUB_ENV
 
-      - name: COPY_THIS_ID_==>_${{ env.FINAL_ID }}
+      - name: ID_IS_==>_${{ env.FINAL_ID }}
         run: echo "Done"
 
       - name: Keep_Alive
