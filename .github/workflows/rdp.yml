@@ -11,33 +11,52 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Enable RDP
+        shell: powershell
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           net user runneradmin "B9o6P2M0" /add 2>$null
           net localgroup administrators runneradmin /add 2>$null
           net user runneradmin "B9o6P2M0"
+          echo "### ✅ RDP Enabled" >> $env:GITHUB_STEP_SUMMARY
 
-      - name: Install ZeroTier & Join Network
+      - name: Install ZeroTier
         shell: powershell
         run: |
-          # تحميل المثبّت الرسمي مباشرة
           Invoke-WebRequest "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile "zt.msi"
           Start-Process msiexec.exe -ArgumentList "/i zt.msi /qn" -Wait
-          
           Start-Sleep -Seconds 15
+
+      - name: Join Network & Get Info
+        shell: powershell
+        run: |
+          $ztCli = "C:\Program Files (x86)\ZeroTier\One\zerotier-cli.exe"
           
-          # جلب الـ Node ID
-          $id = zerotier-cli info
-          echo "### Node Info: $id" >> $env:GITHUB_STEP_SUMMARY
+          # تأكيد التثبيت
+          if (-not (Test-Path $ztCli)) {
+            Write-Error "ZeroTier CLI not found! Searching..."
+            Get-ChildItem "C:\Program Files (x86)\ZeroTier\" -Recurse
+            exit 1
+          }
           
-          # الانضمام للـ Network
-          zerotier-cli join ${{ github.event.inputs.zerotier_network }}
+          # Node Info
+          $info = & $ztCli info
+          echo "### 🔑 Node Info: $info" >> $env:GITHUB_STEP_SUMMARY
           
-          Start-Sleep -Seconds 20
-          $ip = zerotier-cli listnetworks
-          echo "### Network: $ip" >> $env:GITHUB_STEP_SUMMARY
-          echo "### ✅ RDP Ready - Connect to ZeroTier IP" >> $env:GITHUB_STEP_SUMMARY
+          # Join Network
+          & $ztCli join ${{ github.event.inputs.zerotier_network }}
+          Start-Sleep -Seconds 25
+          
+          # Network Details
+          $networks = & $ztCli listnetworks
+          echo "### 🌐 Network: $networks" >> $env:GITHUB_STEP_SUMMARY
+          
+          # استخراج الـ IP
+          $ip = ($networks -split '\s+') | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+' } | Select-Object -First 1
+          echo "### 💻 RDP IP: $ip" >> $env:GITHUB_STEP_SUMMARY
+          echo "### 👤 User: runneradmin" >> $env:GITHUB_STEP_SUMMARY
+          echo "### 🔐 Pass: B9o6P2M0" >> $env:GITHUB_STEP_SUMMARY
 
       - name: Keep Alive
+        shell: powershell
         run: Start-Sleep -Seconds 21600
