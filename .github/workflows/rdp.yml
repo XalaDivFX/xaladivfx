@@ -29,9 +29,9 @@ jobs:
       - name: Join Network and Get Info
         shell: powershell
         run: |
-          $ztCli = "C:\Program Files (x86)\ZeroTier\One\zerotier-cli.exe"
+          $ztCli = "C:\Program Files (x86)\ZeroTier\One\zerotier-cli.bat"
           if (-not (Test-Path $ztCli)) {
-            Get-ChildItem "C:\Program Files (x86)\ZeroTier\" -Recurse
+            Write-Error "ZeroTier CLI not found!"
             exit 1
           }
           $info = & $ztCli info
