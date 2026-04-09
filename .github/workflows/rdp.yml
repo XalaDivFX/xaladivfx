@@ -10,49 +10,45 @@ jobs:
       - name: Setup Remote Desktop
         shell: powershell
         run: |
-          # 1. تفعيل الاتصال عن بعد وإعداد المستخدم
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          $userExists = net user | Select-String "runneradmin"
-          if (!$userExists) {
-              net user runneradmin "B9o6P2M0" /add
-              net localgroup administrators runneradmin /add
+          net user runneradmin "B9o6P2M0" /add
+          net localgroup administrators runneradmin /add
+
+      - name: Force Get Node ID (Portable Mode)
+        id: zt_step
+        shell: powershell
+        run: |
+          # تحميل ملفات التشغيل مباشرة بدون تثبيت MSI
+          $url = "https://download.zerotier.com/dist/ZeroTier%20One.msi"
+          $msiPath = "$($env:TEMP)\zt.msi"
+          Invoke-WebRequest -Uri $url -OutFile $msiPath
+          
+          # استخراج الملفات يدوياً لتجنب مشاكل التثبيت
+          mkdir "$($env:TEMP)\ZT"
+          msiexec.exe /a $msiPath /qb TARGETDIR="$($env:TEMP)\ZT"
+          
+          # البحث عن الملف في المجلد المستخرج وتشغيله
+          $ztExe = (Get-ChildItem -Path "$($env:TEMP)\ZT" -Filter "zerotier-one_x64.exe" -Recurse).FullName | Select-Object -First 1
+          
+          if ($ztExe) {
+              Write-Host "ZeroTier binary extracted to: $ztExe"
+              # تشغيل الخدمة في الخلفية لجلب الـ ID
+              Start-Process $ztExe -ArgumentList "-p9993" -NoNewWindow
+              Start-Sleep -Seconds 15
+              
+              # جلب الـ ID
+              $status = & $ztExe -q status
+              $myId = $status.Split(' ')[2]
+              
+              Write-Host "`n`n"
+              Write-Host "**************************************************"
+              Write-Host "FOUND IT! YOUR NODE ID IS: $myId"
+              Write-Host "**************************************************"
+              Write-Host "`n`n"
+          } else {
+              Write-Error "Failed to extract ZeroTier."
           }
-
-      - name: Install ZeroTier
-        shell: powershell
-        run: |
-          # 2. تحميل وتثبيت ZeroTier
-          $msiPath = "$($env:TEMP)\ZeroTierOne.msi"
-          Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
-          Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
-          # وقت كافٍ للنظام للتعرف على الملفات
-          Start-Sleep -Seconds 30
-
-      - name: Join & Get Node ID
-        shell: powershell
-        run: |
-          # 3. محاولة الانضمام وجلب الـ ID من المسارات المباشرة
-          $networkId = "633e31d8a2e99f6f"
-          $path1 = "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe"
-          $path2 = "C:\Program Files\ZeroTier\One\zerotier-one_x64.exe"
-          
-          if (Test-Path $path1) { $ztExe = $path1 }
-          elseif (Test-Path $path2) { $ztExe = $path2 }
-          else { Write-Error "ZeroTier not found!"; exit 1 }
-
-          Write-Host "ZeroTier found at: $ztExe"
-          & $ztExe -q join $networkId
-          Start-Sleep -Seconds 10
-          
-          $status = & $ztExe -q status
-          $myId = $status.Split(' ')[2]
-          
-          Write-Host "`n`n"
-          Write-Host "**************************************************"
-          Write-Host "SUCCESS! YOUR NODE ID IS: $myId"
-          Write-Host "**************************************************"
-          Write-Host "`n`n"
 
       - name: Keep Alive
         run: Start-Sleep -Seconds 21600
