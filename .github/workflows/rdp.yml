@@ -1,37 +1,34 @@
-name: IQonomy-RDP-Cloudflare-Pro
+name: IQonomy-RDP-ZeroTier
 
 on:
   workflow_dispatch:
 
 jobs:
-  setup-rdp:
+  build:
     runs-on: windows-latest
     steps:
-    - name: Configure Windows for Remote Access
-      continue-on-error: true
-      run: |
-        # Enable RDP
-        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
-        # Disable NLA to allow older or Linux-based clients to connect easily
-        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
-        # Enable Firewall
-        netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
-        # Setup User
-        net user runneradmin "B9o6P2M0" /add
-        net localgroup administrators runneradmin /add
-        exit 0
+      - name: Setup Remote Desktop
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          net user runneradmin "B9o6P2M0" /add
+          net localgroup administrators runneradmin /add
 
-    - name: Install Cloudflared
-      run: |
-        curl -L -o cloudflared.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
+      - name: Install ZeroTier
+        shell: powershell
+        run: |
+          $msiPath = "$($env:TEMP)\ZeroTierOne.msi"
+          Invoke-WebRequest -Uri "https://download.zerotier.com/dist/ZeroTier%20One.msi" -OutFile $msiPath
+          Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/qn" -Wait
+          
+      - name: Join Network
+        shell: powershell
+        run: |
+          # استبدل الـ ID ده بـ Network ID الخاص بك من موقع zerotier.com
+          $networkId = "633e31d8a2e99f6f" 
+          cd "C:\Program Files (x86)\ZeroTier\One"
+          .\zerotier-one_x64.exe -q join $networkId
+          Start-Sleep -Seconds 20
 
-    - name: Launch Tunnel
-      run: |
-        # Starting tunnel on localhost port 3389
-        Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://127.0.0.1:3389" -NoNewWindow
-        Start-Sleep -Seconds 30
-
-    - name: Keep Alive
-      run: |
-        Write-Host "Check Launch Tunnel logs for the new link."
-        Start-Sleep -Seconds 21600
+      - name: Keep Alive
+        run: Start-Sleep -Seconds 21600
