@@ -10,19 +10,15 @@ jobs:
       - name: Setup Remote Desktop
         shell: powershell
         run: |
-          # تفعيل RDP
+          # تفعيل RDP وتجاوز خطأ اليوزر (حل مشكلة Screenshot 07-16-20)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # فحص وجود المستخدم قبل إنشائه لتجنب الـ Error 1
           $userExists = net user | Select-String "runneradmin"
           if (!$userExists) {
               net user runneradmin "B9o6P2M0" /add
               net localgroup administrators runneradmin /add
-          } else {
-              Write-Host "User runneradmin already exists, skipping creation."
           }
-          # ضمان نجاح الخطوة مهما حدث
           exit 0
 
       - name: Install ZeroTier
@@ -36,21 +32,27 @@ jobs:
       - name: Join ZeroTier Network
         shell: powershell
         run: |
-          # استبدل YOUR_NETWORK_ID بالمعرف الخاص بك
           $networkId = "633e31d8a2e99f6f" 
           
-          # محاولة تشغيل ملف ZeroTier من المسارات المحتملة
+          # فحص المسارات (حل مشكلة Screenshot 07-19-31)
           $paths = @(
               "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe",
               "C:\Program Files\ZeroTier\One\zerotier-one_x64.exe"
           )
           
+          $ztExe = ""
           foreach ($path in $paths) {
-              if (Test-Path $path) {
-                  & $path -q join $networkId
-                  Write-Host "Joined network via $path"
-                  break
-              }
+              if (Test-Path $path) { $ztExe = $path; break }
+          }
+          
+          if ($ztExe) {
+              & $ztExe -q join $networkId
+              Start-Sleep -Seconds 5
+              Write-Host "=========================================="
+              Write-Host "YOUR NODE ID IS:"
+              # إظهار الـ ID بوضوح للإضافة اليدوية
+              & $ztExe -q status | ForEach-Object { $_.Split(' ')[2] }
+              Write-Host "=========================================="
           }
           Start-Sleep -Seconds 10
 
