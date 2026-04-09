@@ -6,32 +6,35 @@ on:
 jobs:
   setup-rdp:
     runs-on: windows-latest
-
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-
-    - name: Enable RDP
+    - name: Enable Remote Desktop
       run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-        net user runneradmin YourPassword123
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        net user runneradmin "B9o6P2M0"
 
-    - name: Download Ngrok
+    - name: Install Ngrok
       run: |
-        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+        Invoke-WebRequest https://bin.equinox.io/c/b34edq6tiW5/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
         Expand-Archive ngrok.zip
 
-    - name: Setup Ngrok Auth
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK }}
-      run: |
-        .\ngrok\ngrok.exe authtoken $env:NGROK_AUTH_TOKEN
+    - name: Authenticate Ngrok
+      run: .\ngrok.exe authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Start Ngrok Tunnel
+    - name: Start RDP Tunnel
       run: |
-        .\ngrok\ngrok.exe tcp 3389
+        # تشغيل التانل على بورت 3389 الخاص بالـ RDP
+        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+
+    - name: Get RDP Address
+      run: |
+        $l = (Invoke-WebRequest -Uri http://localhost:4040/api/tunnels -UseBasicParsing | ConvertFrom-Json).tunnels[0].public_url
+        Write-Host "Address: $l"
+        Write-Host "User: runneradmin"
+        Write-Host "Pass: B9o6P2M0"
 
     - name: Keep Alive
-      run: Start-Sleep -Seconds 216000
+      run: |
+        # سيبقى السيرفر متاحاً لمدة 6 ساعات
+        Start-Sleep -Seconds 21600
