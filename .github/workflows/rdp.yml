@@ -12,7 +12,6 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # حل مشكلة "account already exists"
           $userExists = net user runneradmin 2>$null
           if ($LASTEXITCODE -eq 0) {
             net user runneradmin "B9o6P2M0"
@@ -20,7 +19,7 @@ jobs:
             net user runneradmin "B9o6P2M0" /add
             net localgroup administrators runneradmin /add
           }
-          echo "### ✅ RDP Enabled" >> $env:GITHUB_STEP_SUMMARY
+          Add-Content $env:GITHUB_STEP_SUMMARY "### RDP Enabled"
 
       - name: Install ZeroTier
         shell: powershell
@@ -29,7 +28,7 @@ jobs:
           Start-Process msiexec.exe -ArgumentList "/i zt.msi /qn" -Wait
           Start-Sleep -Seconds 15
 
-      - name: Join Network & Get Info
+      - name: Join Network and Get Info
         shell: powershell
         run: |
           $ztCli = "C:\Program Files (x86)\ZeroTier\One\zerotier-cli.exe"
@@ -40,22 +39,19 @@ jobs:
             exit 1
           }
           
-          # Node Info
           $info = & $ztCli info
-          echo "### 🔑 Node Info: $info" >> $env:GITHUB_STEP_SUMMARY
+          Add-Content $env:GITHUB_STEP_SUMMARY "### Node Info: $info"
           
-          # Join Network - hardcoded
           & $ztCli join 633e31d8a2e99f6f
           Start-Sleep -Seconds 25
           
-          # Network Details
           $networks = & $ztCli listnetworks
-          echo "### 🌐 Network: $networks" >> $env:GITHUB_STEP_SUMMARY
+          Add-Content $env:GITHUB_STEP_SUMMARY "### Network: $networks"
           
           $ip = ($networks -split '\s+') | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+' } | Select-Object -First 1
-          echo "### 💻 RDP IP: $ip" >> $env:GITHUB_STEP_SUMMARY
-          echo "### 👤 User: runneradmin" >> $env:GITHUB_STEP_SUMMARY
-          echo "### 🔐 Pass: B9o6P2M0" >> $env:GITHUB_STEP_SUMMARY
+          Add-Content $env:GITHUB_STEP_SUMMARY "### RDP IP: $ip"
+          Add-Content $env:GITHUB_STEP_SUMMARY "### User: runneradmin"
+          Add-Content $env:GITHUB_STEP_SUMMARY "### Pass: B9o6P2M0"
 
       - name: Keep Alive
         shell: powershell
